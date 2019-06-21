@@ -8,10 +8,10 @@ public abstract class Message implements IMessage, Serializable {
 	private final String username;
 	private final long timestamp;
 
-	protected Message(String msg, String username, long timestamp) {
+	protected Message(String username, String msg) {
 		this.msg = msg;
 		this.username = username;
-		this.timestamp = timestamp;
+		this.timestamp = System.currentTimeMillis();
 	}
 
 	@Override
@@ -28,5 +28,4 @@ public abstract class Message implements IMessage, Serializable {
 	public long getTimestamp() {
 		return this.timestamp;
 	}
-
 }

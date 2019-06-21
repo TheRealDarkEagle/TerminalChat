@@ -1,13 +1,17 @@
-package v2.server.chatroom.model;
+package model;
 
 public class User {
 
 	private String name;
 	private long timestamp;
+	private final int id;
+	private boolean admin;
 
-	public User(String name, long currentTimeMillis) {
+	public User(String name, long currentTimeMillis, int id, boolean admin) {
 		this.name = name;
+		this.id = id;
 		this.timestamp = currentTimeMillis;
+		this.admin = admin;
 	}
 
 	public Long getTimestamp() {
@@ -24,6 +28,14 @@ public class User {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	public int getId() {
+		return this.id;
+	}
+
+	public boolean isAdmin() {
+		return this.admin;
 	}
 
 }

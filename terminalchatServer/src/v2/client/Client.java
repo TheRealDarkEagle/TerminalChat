@@ -4,12 +4,20 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.Scanner;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import blueprints.Message;
+import model.ChatMessage;
+import model.CommandMessage;
+import model.InfoMessage;
+import model.PrivateMessage;
 
 /*
  * @TODO
@@ -31,6 +39,8 @@ public class Client {
 	private ReciveMsg receiveMsgThread;
 	private SendMsg sendMsgThread;
 	private int port = 31337;
+	private String username;
+	private String serverAddress;
 
 	public static Client getInstance() {
 		if (instance == null) {
@@ -39,12 +49,26 @@ public class Client {
 		return instance;
 	}
 
-	private String serverAddress;
-
 	private Client(String serverAddress) {
+		LOGGER.setLevel(Level.WARNING);
 		LOGGER.info("application started");
 		this.serverAddress = serverAddress;
+		this.username = createUsername();
 		start();
+	}
+
+	private String createUsername() {
+		System.out.println("bitte Benutzernamen eingeben!: ");
+		String choosenName = "";
+		Scanner scanner = new Scanner(System.in);
+		do {
+			choosenName = scanner.nextLine();
+			choosenName = choosenName.replaceAll("[ ]", "");
+			if (choosenName.isEmpty()) {
+				System.out.println("Ungültiger Username!\r\n Bitte Benutzernamen eingeben:");
+			}
+		} while (choosenName.isEmpty() || choosenName.startsWith(" "));
+		return choosenName;
 	}
 
 	/*
@@ -55,7 +79,6 @@ public class Client {
 		try {
 			this.socket = new Socket(serverAddress, port);
 			LOGGER.info(socket.toString());
-			System.out.println(socket);
 			this.receiveMsgThread = new ReciveMsg(this.socket.getInputStream());
 			this.sendMsgThread = new SendMsg(this.socket.getOutputStream());
 			this.receiveMsgThread.start();
@@ -65,7 +88,7 @@ public class Client {
 			LOGGER.warning("Server does not response! " + ce.getMessage());
 			reconnect();
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.warning("Exception beim starten des Programmes! -> " + e.getMessage());
 		}
 	}
 
@@ -75,7 +98,7 @@ public class Client {
 	 */
 	public void reconnect() {
 		LOGGER.info("Tring to reconnect");
-		LOGGER.fine("Socket infos: \r\n" + this.socket);
+		LOGGER.fine("Socket infos: \r\n " + this.socket);
 		try {
 			Thread.sleep(5000);
 			this.socket.close();
@@ -86,25 +109,23 @@ public class Client {
 			this.socket.bind(null);
 		} catch (IOException e) {
 			LOGGER.warning("IO EXECPTION -> " + e.getMessage());
-
 		} catch (InterruptedException e) {
-			LOGGER.info("Thread got interrupted! " + e.getMessage());
+			LOGGER.warning("Thread got interrupted! " + e.getMessage());
+			Thread.currentThread().interrupt();
 		} catch (NullPointerException nupi) {
-			LOGGER.info("Etwas war null!! -> " + nupi.getMessage());
+			LOGGER.warning("Etwas war null!! -> " + nupi.getMessage());
 		}
-
 		System.out.println("Socket infos: \r\n" + this.socket);
-
 		start();
 	}
 
 	class SendMsg extends Thread {
 
-		PrintWriter writer = null;
+		ObjectOutputStream writer = null;
 		boolean exitThread = false;
 
-		public SendMsg(OutputStream outputStream) {
-			writer = new PrintWriter(outputStream, true);
+		public SendMsg(OutputStream outputStream) throws IOException {
+			writer = new ObjectOutputStream(outputStream);
 		}
 
 		@Override
@@ -112,12 +133,12 @@ public class Client {
 			LOGGER.info("SendMsg startet!");
 			BufferedReader br = null;
 			try {
+				Message m = new InfoMessage(username, "connected");
+				writer.writeObject(m);
 				String output;
 				br = new BufferedReader(new InputStreamReader(System.in));
-				System.out.println("bitte Benutzernamen eingeben!: ");
 				while ((!(output = br.readLine()).equals("/quit"))) {
-					System.out.println(output);
-					writer.println(output);
+					sendMsg(createMsg(output));
 				}
 				recon = false;
 				br.close();
@@ -126,14 +147,63 @@ public class Client {
 				LOGGER.info("Server closed! " + s.getMessage());
 			} catch (Exception e) {
 				LOGGER.warning("Ein SendMsg Fehler ist aufgetreten! " + e.getMessage());
+				try {
+					writer.reset();
+				} catch (IOException e1) {
+					LOGGER.warning("IO Exception beim Senden aufgetreten -> " + e1.getMessage());
+				}
 			} finally {
 				try {
-					writer.close();
 					br.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					LOGGER.warning("IO Exception im FinallyBlock des Sendens! ->" + e.getMessage());
 				}
 			}
+		}
+
+		private void sendMsg(Message m) {
+			if (!m.getMsg().isEmpty()) {
+				try {
+					writer.writeObject(m);
+				} catch (IOException e) {
+					LOGGER.warning("ein fehler ist aufgetreten! -> " + e.getMessage());
+					this.interrupt();
+					try {
+						this.finalize();
+					} catch (Throwable e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+				}
+			}
+		}
+
+		/*
+		 * Erstellt ein MessageObjekt -> achtet daruf ob es eine ChatMessage war oder
+		 * eine CommandMessage!
+		 */
+		private Message createMsg(String msg) {
+			msg = removeStartingSpaces(msg);
+			// Kreiere eine personalMessage objekt -> username, msg, destinationUser
+			if (msg.startsWith("/#@")) {
+				String recivinguser = msg.substring(msg.indexOf('@') + 1, msg.indexOf(' ', msg.indexOf('@' + 1)));
+				return new PrivateMessage(recivinguser, msg, username);
+			} else if (msg.startsWith("/#name")) {
+				username = msg.substring(msg.indexOf(' ') + 1).trim();
+				return new InfoMessage(username, "nameChange:" + msg.substring(msg.indexOf(' ')));
+			} else {
+				return msg.startsWith("/#") ? new CommandMessage(username, msg) : new ChatMessage(username, msg);
+			}
+		}
+
+		private String removeStartingSpaces(String msg) {
+			if (msg.startsWith(" ")) {
+				do {
+					msg = msg.substring(1);
+				} while (msg.startsWith(" "));
+
+			}
+			return msg;
 		}
 	}
 
@@ -154,6 +224,9 @@ public class Client {
 			try {
 				br = new BufferedReader(in);
 				while ((line = br.readLine()) != null || !recon || !exitThread) {
+					if (line.startsWith("null")) {
+						break;
+					}
 					System.out.println(line);
 				}
 			} catch (SocketException se) {
@@ -165,6 +238,8 @@ public class Client {
 					System.out.println("Disconnected from Server!");
 				}
 			} catch (Exception e) {
+				System.out.println("U got kicked From the Server!");
+				sendMsgThread.interrupt();
 				LOGGER.warning("A Recive error Occured! " + e.getMessage());
 			}
 		}

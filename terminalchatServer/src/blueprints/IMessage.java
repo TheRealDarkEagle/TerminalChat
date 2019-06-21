@@ -8,8 +8,4 @@ public interface IMessage {
 
 	long getTimestamp();
 
-	static boolean isCommandMsg(String msg) {
-		return (msg.startsWith("%%")) ? true : false;
-
-	}
 }

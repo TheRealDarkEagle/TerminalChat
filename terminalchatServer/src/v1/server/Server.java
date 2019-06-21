@@ -1,10 +1,7 @@
 package v1.server;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -19,18 +16,19 @@ import v1.model.User;
 public class Server {
 
 	public static void main(String[] args) throws IOException {
-		Server server = new Server(53598);
+		new Server().getInstance();
+
 	}
 
+	private static Server instance;
+	private static int port = 53598;
+
 	private ServerSocket socket;
-	private Socket client; // Der client bzw verbundene User
-	private Scanner input; // was von den Clients zum server geht
-	private PrintWriter output; // Was der Server herausgibt
 	private String s = "[SERVER]";
 	private Chatroom chat;
 
-	public Server(int port) {
-		startServer(port);
+	private Server() {
+		startServer(Server.port);
 		waitForUser();
 	}
 
@@ -54,6 +52,13 @@ public class Server {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	public Server getInstance() {
+		if (instance == null) {
+			instance = new Server();
+		}
+		return instance;
 	}
 
 }

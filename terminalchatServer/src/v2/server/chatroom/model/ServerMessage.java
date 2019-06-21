@@ -4,8 +4,8 @@ import blueprints.Message;
 
 public class ServerMessage extends Message {
 
-	ServerMessage(String msg, String username, long timestamp) {
-		super(msg, username, timestamp);
+	ServerMessage(String msg, String username) {
+		super(msg, username);
 	}
 
 }
